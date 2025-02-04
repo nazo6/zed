@@ -340,8 +340,8 @@ impl Platform for WindowsPlatform {
             .read()
             .iter()
             .for_each(|handle| unsafe {
+                state.push(*handle);
                 if IsWindowVisible(*handle).as_bool() {
-                    state.push(*handle);
                     ShowWindow(*handle, SW_HIDE).ok().log_err();
                 }
             });
