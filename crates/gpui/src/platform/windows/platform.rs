@@ -33,6 +33,8 @@ use crate::{platform::blade::BladeContext, *};
 pub(crate) struct WindowsPlatform {
     state: RefCell<WindowsPlatformState>,
     raw_window_handles: RwLock<SmallVec<[HWND; 4]>>,
+    // The window handles that are hided by `hide` method.
+    hidden_windows: RwLock<SmallVec<[HWND; 4]>>,
     gpu_context: BladeContext,
     // The below members will never change throughout the entire lifecycle of the app.
     icon: HICON,
@@ -108,6 +110,7 @@ impl WindowsPlatform {
         Self {
             state,
             raw_window_handles,
+            hidden_windows: RwLock::new(SmallVec::new()),
             gpu_context,
             icon,
             main_receiver,
@@ -323,9 +326,26 @@ impl Platform for WindowsPlatform {
         }
     }
 
-    fn activate(&self, _ignoring_other_apps: bool) {}
+    fn activate(&self, _ignoring_other_apps: bool) {
+        let mut state = self.hidden_windows.write();
+        state.iter().for_each(|handle| unsafe {
+            ShowWindow(*handle, SW_SHOW).ok().log_err();
+        });
+        state.clear();
+    }
 
-    fn hide(&self) {}
+    fn hide(&self) {
+        let mut state = self.hidden_windows.write();
+        self.raw_window_handles
+            .read()
+            .iter()
+            .for_each(|handle| unsafe {
+                if IsWindowVisible(*handle).as_bool() {
+                    state.push(*handle);
+                    ShowWindow(*handle, SW_HIDE).ok().log_err();
+                }
+            });
+    }
 
     // todo(windows)
     fn hide_other_apps(&self) {
